@@ -15,7 +15,12 @@ struct Mat4x4 {
         };
     };
 
-    Mat4x4() { *this = identity(); }
+    Mat4x4() {
+        for (i32 i = 0; i < 16; i++) {
+            m[i] = 0.0f;
+        }
+        m00 = m11 = m22 = m33 = 1.0f;
+    }
 
     Mat4x4(const f32 data[16]) {
         for (i32 i = 0; i < 16; i++) {
@@ -56,6 +61,30 @@ struct Mat4x4 {
         result.m03 = x;
         result.m13 = y;
         result.m23 = z;
+        return result;
+    }
+
+    static Mat4x4 orthographic(f32 left, f32 right, f32 bottom, f32 top, f32 near, f32 far) {
+        Mat4x4 result = {};
+        result.m00 = 2.0f / (right - left);
+        result.m11 = 2.0f / (top - bottom);
+        result.m22 = -2.0f / (far - near);
+        result.m03 = -(right + left) / (right - left);
+        result.m13 = -(top + bottom) / (top - bottom);
+        result.m23 = -(far + near) / (far - near);
+        result.m33 = 1.0f;
+        return result;
+    }
+
+    static Mat4x4 perspective(f32 fovy, f32 aspect, f32 near, f32 far) {
+        Mat4x4 result = {};
+        f32 tan_half_fovy = tanf(fovy / 2.0f);
+        
+        result.m00 = 1.0f / (aspect * tan_half_fovy);
+        result.m11 = 1.0f / tan_half_fovy;
+        result.m22 = -(far + near) / (far - near);
+        result.m23 = -(2.0f * far * near) / (far - near);
+        result.m32 = -1.0f;
         return result;
     }
 

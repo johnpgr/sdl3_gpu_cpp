@@ -5,6 +5,7 @@
 -Wextra
 -Wpedantic
 -Wno-dangling
+-Wno-address-of-temporary
 -Wno-c99-extensions
 -Wno-gnu-anonymous-struct
 -Wno-nested-anon-types

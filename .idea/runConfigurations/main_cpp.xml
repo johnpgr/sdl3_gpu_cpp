@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="main.cpp" type="CppFileRunConfiguration" factoryName="CppFileRunConfiguration" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="file://$PROJECT_DIR$" PASS_PARENT_ENVS_2="true" PROJECT_NAME="sdl3_gpu_cpp" TARGET_NAME="main.cpp" CONFIG_NAME="main.cpp">
+    <option name="compilerFile" value="/usr/bin/clang++" />
+    <option name="compilerOptions" value="-std=c++23 -g -L/usr/local/lib -Wl,-rpath,/usr/local/lib -lSDL3 -I/usr/local/include -Wall -Wextra -Wpedantic -Wno-dangling -Wno-address-of-temporary -Wno-c99-extensions -Wno-gnu-anonymous-struct -Wno-nested-anon-types -Wno-missing-designated-field-initializers -Wno-reorder-init-list" />
+    <option name="sourceFile" value="src/main.cpp" />
+    <option name="toolchainName" value="Default" />
+    <method v="2">
+      <option name="com.jetbrains.cidr.cpp.runfile.CppFileBuildBeforeRunTaskProvider$BasicBuildBeforeRunTask" enabled="true" />
+    </method>
+  </configuration>
+</component>

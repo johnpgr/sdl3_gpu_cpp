@@ -8,16 +8,20 @@
 struct Game {
     Allocator& allocator;
 
-    SDL_Window* window;
-    SDL_GPUDevice* device;
-    SDL_Texture* main_texture;
-    SDL_GPUGraphicsPipeline* pipeline_fill;
-    SDL_GPUGraphicsPipeline* pipeline_line;
-    SDL_GPUBuffer* vertex_buffer;
+    SDL_Window* window{};
+    SDL_GPUDevice* device{};
+    SDL_Texture* main_texture{};
+    SDL_GPUGraphicsPipeline* pipeline_fill{};
+    SDL_GPUGraphicsPipeline* pipeline_line{};
+    SDL_GPUBuffer* vertex_buffer{};
 
     bool running = true;
     i32 window_width = 800;
     i32 window_height = 600;
+
+    static Game init(Allocator& allocator) {
+        return Game{.allocator = allocator};
+    }
 };
 
 struct Vertex {
@@ -26,7 +30,7 @@ struct Vertex {
 };
 
 struct TransformBuffer {
-    Mat4x4 model_matrix;
+    Mat4x4 mvp_matrix;
 };
 
 [[maybe_unused]]
@@ -56,7 +60,7 @@ bool init(Game* game) {
         "Unnamed game",
         game->window_width,
         game->window_height,
-        SDL_WINDOW_HIDDEN
+        SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE
     );
     if (!game->window) {
         SDL_Log("Failed to create window %s\n", SDL_GetError());
@@ -83,7 +87,7 @@ bool init(Game* game) {
     }
 
     SDL_GPUShader* vertex_shader =
-        load_shader(game->allocator, game->device, "raw-triangle.vert", 0, 0, 0, 0);
+        load_shader(game->allocator, game->device, "raw-triangle.vert", 0, 1, 0, 0);
     SDL_GPUShader* fragment_shader =
         load_shader(game->allocator, game->device, "solid-color.frag", 0, 0, 0, 0);
 
@@ -231,15 +235,29 @@ void handle_event(SDL_Event* event, Game* game) {
                     break;
             }
             break;
+        case SDL_EVENT_WINDOW_RESIZED:
+            // Update the stored window dimensions
+            game->window_width = event->window.data1;
+            game->window_height = event->window.data2;
+            SDL_Log("Window resized to %dx%d\n", game->window_width, game->window_height);
+            break;
     }
 }
 
 bool render(Game* game) {
-    // Create a rotating transform
-    // f32 time = SDL_GetTicks() / 1000.0f;
-    // Mat4x4 rotation = Mat4x4::rotation_z(time);
-    // Mat4x4 scale = Mat4x4::scale(0.8f, 0.8f, 1.0f);
-    // TransformBuffer transform_buffer = {.model_matrix = scale * rotation};
+    // Create a projection matrix based on current window size
+    f32 aspect_ratio = (f32)game->window_width / (f32)game->window_height;
+    Mat4x4 projection = Mat4x4::orthographic(-aspect_ratio, aspect_ratio, -1.0f, 1.0f, -1.0f, 1.0f);
+    
+    // Create a rotating model matrix
+    f32 time = SDL_GetTicks() / 1000.0f;
+    Mat4x4 rotation = Mat4x4::rotation_z(time);
+    Mat4x4 scale = Mat4x4::scale(0.8f, 0.8f, 1.0f);
+    Mat4x4 model = scale * rotation;
+    
+    // Combine into model-view-projection matrix
+    Mat4x4 mvp = projection * model;
+    TransformBuffer transform_buffer = {.mvp_matrix = mvp};
 
     SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(game->device);
     if (!cmdbuf) {
@@ -265,6 +283,8 @@ bool render(Game* game) {
         return false;
     }
 
+    SDL_PushGPUVertexUniformData(cmdbuf, 0, &transform_buffer, sizeof(TransformBuffer));
+
     SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(
         cmdbuf,
         &(SDL_GPUColorTargetInfo){
@@ -277,7 +297,6 @@ bool render(Game* game) {
         nullptr
     );
     SDL_BindGPUGraphicsPipeline(render_pass, game->pipeline_fill);
-    // SDL_PushGPUVertexUniformData(cmdbuf, 0, &transform_buffer, sizeof(TransformBuffer));
 
     SDL_GPUBufferBinding buffer_bindings[] = {
         {
@@ -301,7 +320,7 @@ int main(int argc, char* argv[]) {
     ArenaAllocator arena = ArenaAllocator::init(PageAllocator::init(), 4096, GB(2));
     Allocator allocator = arena.allocator();
 
-    Game game = Game{.allocator = allocator};
+    Game game = Game::init(allocator);
 
     defer {
         deinit(&game);
