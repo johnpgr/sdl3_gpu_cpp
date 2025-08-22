@@ -8,7 +8,11 @@ CFLAGS="-std=c++23 \
     -Wextra \
     -Wpedantic \
     -Wno-c99-extensions \
+    -Wno-dangling \
+    -Wno-address-of-temporary \
     -Wno-missing-designated-field-initializers \
+    -Wno-nested-anon-types \
+    -Wno-gnu-anonymous-struct \
     -Wno-reorder-init-list"
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

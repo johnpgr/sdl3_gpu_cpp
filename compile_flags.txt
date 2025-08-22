@@ -4,6 +4,9 @@
 -Wall
 -Wextra
 -Wpedantic
+-Wno-dangling
 -Wno-c99-extensions
+-Wno-gnu-anonymous-struct
+-Wno-nested-anon-types
 -Wno-missing-designated-field-initializers
 -Wno-reorder-init-list

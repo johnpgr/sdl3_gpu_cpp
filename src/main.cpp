@@ -1,5 +1,6 @@
 #include "lib/allocator.h"
 #include "lib/def.h"
+#include "math.h"
 #include "shader.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -24,14 +25,26 @@ struct Vertex {
     f32 r, g, b, a;
 };
 
-constexpr SDL_FColor COLOR_WHITE = (SDL_FColor){1.0f, 1.0f, 1.0f, 1.0f};
-constexpr SDL_FColor COLOR_BLACK = (SDL_FColor){0.0f, 0.0f, 0.0f, 1.0f};
-constexpr SDL_FColor COLOR_RED = (SDL_FColor){1.0f, 0.0f, 0.0f, 1.0f};
-constexpr SDL_FColor COLOR_GREEN = (SDL_FColor){0.0f, 1.0f, 0.0f, 1.0f};
-constexpr SDL_FColor COLOR_BLUE = (SDL_FColor){0.0f, 0.0f, 1.0f, 1.0f};
-constexpr SDL_FColor COLOR_CYAN = (SDL_FColor){0.0f, 1.0f, 1.0f, 1.0f};
-constexpr SDL_FColor COLOR_YELLOW = (SDL_FColor){1.0f, 1.0f, 0.0f, 1.0f};
-constexpr SDL_FColor COLOR_PINK = (SDL_FColor){1.0f, 0.0f, 1.0f, 1.0f};
+struct TransformBuffer {
+    Mat4x4 model_matrix;
+};
+
+[[maybe_unused]]
+constexpr SDL_FColor COLOR_WHITE = {1.0f, 1.0f, 1.0f, 1.0f};
+[[maybe_unused]]
+constexpr SDL_FColor COLOR_BLACK = {0.0f, 0.0f, 0.0f, 1.0f};
+[[maybe_unused]]
+constexpr SDL_FColor COLOR_RED = {1.0f, 0.0f, 0.0f, 1.0f};
+[[maybe_unused]]
+constexpr SDL_FColor COLOR_GREEN = {0.0f, 1.0f, 0.0f, 1.0f};
+[[maybe_unused]]
+constexpr SDL_FColor COLOR_BLUE = {0.0f, 0.0f, 1.0f, 1.0f};
+[[maybe_unused]]
+constexpr SDL_FColor COLOR_CYAN = {0.0f, 1.0f, 1.0f, 1.0f};
+[[maybe_unused]]
+constexpr SDL_FColor COLOR_YELLOW = {1.0f, 1.0f, 0.0f, 1.0f};
+[[maybe_unused]]
+constexpr SDL_FColor COLOR_PINK = {1.0f, 0.0f, 1.0f, 1.0f};
 
 bool init(Game* game) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -83,47 +96,45 @@ bool init(Game* game) {
         SDL_ReleaseGPUShader(game->device, fragment_shader);
     };
 
-    SDL_GPUVertexAttribute vertex_attributes[] = {
-        {
-            .location = 0,
-            .buffer_slot = 0,
-            .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-            .offset = 0,
-        },
-        {
-            .location = 1,
-            .buffer_slot = 0,
-            .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-            .offset = sizeof(f32) * 4,
-        },
-    };
-
-    SDL_GPUVertexBufferDescription vertex_buffer_descriptions[] = {
-        {
-            .slot = 0,
-            .pitch = sizeof(Vertex),
-            .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
-        },
-    };
-
-    SDL_GPUVertexInputState vertex_input_state = {
-        .vertex_buffer_descriptions = vertex_buffer_descriptions,
-        .num_vertex_buffers = 1,
-        .vertex_attributes = vertex_attributes,
-        .num_vertex_attributes = 2,
-    };
-
-    SDL_GPUColorTargetDescription color_target_descriptions[] = {{
-        .format = SDL_GetGPUSwapchainTextureFormat(game->device, game->window),
-    }};
-
     SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {
         .vertex_shader = vertex_shader,
         .fragment_shader = fragment_shader,
-        .vertex_input_state = vertex_input_state,
+        .vertex_input_state =
+            (SDL_GPUVertexInputState){
+                .vertex_buffer_descriptions =
+                    (SDL_GPUVertexBufferDescription[]){
+                        {
+                            .slot = 0,
+                            .pitch = sizeof(Vertex),
+                            .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+                        },
+                    },
+                .num_vertex_buffers = 1,
+                .vertex_attributes =
+                    (SDL_GPUVertexAttribute[]){
+                        {
+                            .location = 0,
+                            .buffer_slot = 0,
+                            .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+                            .offset = 0,
+                        },
+                        {
+                            .location = 1,
+                            .buffer_slot = 0,
+                            .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+                            .offset = sizeof(f32) * 4,
+                        },
+                    },
+                .num_vertex_attributes = 2,
+            },
         .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
         .target_info = {
-            .color_target_descriptions = color_target_descriptions,
+            .color_target_descriptions =
+                (SDL_GPUColorTargetDescription[]){
+                    {
+                        .format = SDL_GetGPUSwapchainTextureFormat(game->device, game->window),
+                    },
+                },
             .num_color_targets = 1,
         },
     };
@@ -143,12 +154,9 @@ bool init(Game* game) {
     }
 
     Vertex triangle_vertices[] = {
-        {-0.5f, -0.5f, 0.0f, 1.0f,
-            1.0f, 0.0f, 0.0f, 1.0f}, // Bottom left - red
-        {0.5f, -0.5f, 0.0f, 1.0f,
-            0.0f, 1.0f, 0.0f, 1.0f},  // Bottom right - green
-        {0.0f, 0.5f, 0.0f, 1.0f,
-            0.0f, 0.0f, 1.0f, 1.0f},   // Top center - blue
+        {-0.5f, -0.5f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f}, // Bottom left - red
+        {0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f},  // Bottom right - green
+        {0.0f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f},   // Top center - blue
     };
 
     SDL_GPUBufferCreateInfo vertex_buffer_info = {
@@ -227,6 +235,12 @@ void handle_event(SDL_Event* event, Game* game) {
 }
 
 bool render(Game* game) {
+    // Create a rotating transform
+    // f32 time = SDL_GetTicks() / 1000.0f;
+    // Mat4x4 rotation = Mat4x4::rotation_z(time);
+    // Mat4x4 scale = Mat4x4::scale(0.8f, 0.8f, 1.0f);
+    // TransformBuffer transform_buffer = {.model_matrix = scale * rotation};
+
     SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(game->device);
     if (!cmdbuf) {
         SDL_Log("Failed to acquire command buffer %s\n", SDL_GetError());
@@ -251,15 +265,19 @@ bool render(Game* game) {
         return false;
     }
 
-    SDL_GPUColorTargetInfo color_target_info = {
-        .texture = swapchain_texture,
-        .clear_color = COLOR_BLACK,
-        .load_op = SDL_GPU_LOADOP_CLEAR,
-        .store_op = SDL_GPU_STOREOP_STORE,
-    };
-
-    SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(cmdbuf, &color_target_info, 1, nullptr);
+    SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(
+        cmdbuf,
+        &(SDL_GPUColorTargetInfo){
+            .texture = swapchain_texture,
+            .clear_color = COLOR_BLACK,
+            .load_op = SDL_GPU_LOADOP_CLEAR,
+            .store_op = SDL_GPU_STOREOP_STORE,
+        },
+        1,
+        nullptr
+    );
     SDL_BindGPUGraphicsPipeline(render_pass, game->pipeline_fill);
+    // SDL_PushGPUVertexUniformData(cmdbuf, 0, &transform_buffer, sizeof(TransformBuffer));
 
     SDL_GPUBufferBinding buffer_bindings[] = {
         {
@@ -267,13 +285,7 @@ bool render(Game* game) {
             .offset = 0,
         },
     };
-
-    SDL_BindGPUVertexBuffers(
-        render_pass,
-        0,
-        buffer_bindings,
-        1
-    );
+    SDL_BindGPUVertexBuffers(render_pass, 0, buffer_bindings, 1);
 
     SDL_DrawGPUPrimitives(render_pass, 3, 1, 0, 0);
     SDL_EndGPURenderPass(render_pass);

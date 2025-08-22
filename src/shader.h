@@ -46,13 +46,24 @@ SDL_GPUShader* load_shader(
     }
 
     char shader_path[1024];
-    i32 result =
-        snprintf(shader_path, sizeof(shader_path), "assets/shaders/compiled/%s%s", shader_name, extension);
+    i32 result = snprintf(
+        shader_path,
+        sizeof(shader_path),
+        "assets/shaders/compiled/%s%s",
+        shader_name,
+        extension
+    );
 
     if (result < 0 || result >= (i32)sizeof(shader_path)) {
         SDL_Log("Shader path too long or formatting error\n");
         return nullptr;
     }
+
+    SDL_Log(
+        "Loading shader %s from: %s\n",
+        stage == SDL_GPU_SHADERSTAGE_VERTEX ? "VERTEX" : "FRAGMENT",
+        shader_path
+    );
 
     auto file = File::read_all(allocator, shader_path);
     if (!file.has_value()) {
@@ -61,18 +72,18 @@ SDL_GPUShader* load_shader(
     }
     defer { file->deinit(); };
 
-    SDL_GPUShaderCreateInfo create_info = {
-        .code_size = file->size,
-        .code = (u8*)file->c_str(),
-        .entrypoint = entrypoint,
-        .format = format,
-        .stage = stage,
-        .num_samplers = num_samplers,
-        .num_storage_textures = num_storage_textures,
-        .num_storage_buffers = num_storage_buffers,
-        .num_uniform_buffers = num_uniform_buffers,
-        .props = 0,
-    };
-
-    return SDL_CreateGPUShader(device, &create_info);
+    return SDL_CreateGPUShader(
+        device,
+        &(SDL_GPUShaderCreateInfo){
+            .code_size = file->size,
+            .code = (u8*)file->c_str(),
+            .entrypoint = entrypoint,
+            .format = format,
+            .stage = stage,
+            .num_samplers = num_samplers,
+            .num_storage_textures = num_storage_textures,
+            .num_storage_buffers = num_storage_buffers,
+            .num_uniform_buffers = num_uniform_buffers,
+        }
+    );
 }
