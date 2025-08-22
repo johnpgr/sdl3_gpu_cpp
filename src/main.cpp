@@ -8,11 +8,13 @@
 
 struct Game {
     Allocator& allocator;
+
     SDL_Window* window = nullptr;
     SDL_GPUDevice* device = nullptr;
     SDL_Texture* main_texture = nullptr;
     SDL_GPUGraphicsPipeline* pipeline_fill = nullptr;
     SDL_GPUGraphicsPipeline* pipeline_line = nullptr;
+
     bool running = true;
     i32 window_width = 800;
     i32 window_height = 600;
@@ -33,7 +35,12 @@ bool init(Game* game) {
         return false;
     }
 
-    game->window = SDL_CreateWindow("Unnamed game", game->window_width, game->window_height, 0);
+    game->window = SDL_CreateWindow(
+        "Unnamed game",
+        game->window_width,
+        game->window_height,
+        SDL_WINDOW_HIDDEN
+    );
     if (!game->window) {
         SDL_Log("Failed to create window %s\n", SDL_GetError());
         return false;
@@ -76,13 +83,15 @@ bool init(Game* game) {
         .format = SDL_GetGPUSwapchainTextureFormat(game->device, game->window),
     }};
 
-    SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {};
-    pipeline_info.vertex_shader = vertex_shader;
-    pipeline_info.fragment_shader = fragment_shader;
-    pipeline_info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-    pipeline_info.target_info = {
-        .color_target_descriptions = color_target_descriptions,
-        .num_color_targets = 1,
+    SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {
+        .target_info =
+            {
+                .color_target_descriptions = color_target_descriptions,
+                .num_color_targets = 1,
+            },
+        .vertex_shader = vertex_shader,
+        .fragment_shader = fragment_shader,
+        .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
     };
 
     pipeline_info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
@@ -98,6 +107,8 @@ bool init(Game* game) {
         SDL_Log("Failed to create line pipeline %s\n", SDL_GetError());
         return false;
     }
+
+    SDL_ShowWindow(game->window);
 
     return true;
 }

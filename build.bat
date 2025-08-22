@@ -76,6 +76,7 @@ clang++ -std=c++23 ^
     -Wpedantic ^
     -Wno-c99-extensions ^
     -Wno-missing-designated-field-initializers ^
+    -Wno-reorder-init-list ^
     -I%SDL3_INCLUDE_DIR% ^
     -L%SDL3_LIB_DIR% ^
     -o %BUILD_DIR%\main.exe ^
