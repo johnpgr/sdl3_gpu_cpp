@@ -1,6 +1,7 @@
 #pragma once
 
 #include "def.h"
+#include <cstring>
 
 /// @brief Checks if two strings are equal.
 /// @param a The first string.
@@ -80,6 +81,7 @@ inline bool string_substring(string str, i32 start, i32 length, mut_string out_b
         length = buffer_size - 1;
     }
     
-    errno_t result = strncpy_s(out_buffer, buffer_size, str + start, length);
-    return result == 0;
+    strncpy(out_buffer, str + start, length);
+    out_buffer[length] = '\0';
+    return true;
 }

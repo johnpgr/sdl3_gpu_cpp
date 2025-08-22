@@ -3,6 +3,7 @@
 #include "allocator.h"
 #include "def.h"
 #include <cstdio>
+#include <optional>
 
 struct File {
     char* data;
@@ -27,9 +28,8 @@ struct File {
             return std::nullopt;
         }
 
-        FILE* file;
-        errno_t err = fopen_s(&file, filepath, "rb");
-        if (err !=0 || !file) {
+        FILE* file = fopen(filepath, "rb");
+        if (!file) {
             return std::nullopt;
         }
 
@@ -73,9 +73,8 @@ struct File {
             return false;
         }
 
-        FILE* file;
-        errno_t err = fopen_s(&file, filepath, "wb");
-        if (err != 0 || !file) {
+        FILE* file = fopen(filepath, "wb");
+        if (!file) {
             return false;
         }
 
@@ -93,9 +92,8 @@ struct File {
             return false;
         }
 
-        FILE* file;
-        errno_t err = fopen_s(&file, filepath, "r");
-        if (err != 0 || !file) {
+        FILE* file = fopen(filepath, "r");
+        if (!file) {
             return false;
         }
 
@@ -111,9 +109,8 @@ struct File {
             return 0;
         }
 
-        FILE* file;
-        errno_t err = fopen_s(&file, filepath, "rb");
-        if (err != 0 || !file) {
+        FILE* file = fopen(filepath, "rb");
+        if (!file) {
             return 0;
         }
 

@@ -32,14 +32,14 @@ SDL_GPUShader* load_shader(
 
     if ((backend_formats & SDL_GPU_SHADERFORMAT_SPIRV) != 0) {
         format = SDL_GPU_SHADERFORMAT_SPIRV;
-        strcpy_s(extension, sizeof(extension), ".spv");
+        strncpy(extension, ".spv", sizeof(extension));
     } else if ((backend_formats & SDL_GPU_SHADERFORMAT_DXIL) != 0) {
         format = SDL_GPU_SHADERFORMAT_DXIL;
-        strcpy_s(extension, sizeof(extension), ".dxil");
+        strncpy(extension, ".dxil", sizeof(extension));
     } else if ((backend_formats & SDL_GPU_SHADERFORMAT_MSL) != 0) {
         format = SDL_GPU_SHADERFORMAT_MSL;
-        strcpy_s(extension, sizeof(extension), ".msl");
-        strcpy_s(entrypoint, sizeof(entrypoint), "main0");
+        strncpy(extension, ".msl", sizeof(extension));
+        strncpy(entrypoint, "main0", sizeof(entrypoint));
     } else {
         SDL_Log("No supported shader formats available");
         return nullptr;

@@ -1,5 +1,6 @@
 -std=c++23
 -IC:\SDKs\SDL3\include
+-I/usr/local/include
 -Wall
 -Wextra
 -Wpedantic

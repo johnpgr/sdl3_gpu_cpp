@@ -9,11 +9,11 @@
 struct Game {
     Allocator& allocator;
 
-    SDL_Window* window = nullptr;
-    SDL_GPUDevice* device = nullptr;
-    SDL_Texture* main_texture = nullptr;
-    SDL_GPUGraphicsPipeline* pipeline_fill = nullptr;
-    SDL_GPUGraphicsPipeline* pipeline_line = nullptr;
+    SDL_Window* window;
+    SDL_GPUDevice* device;
+    SDL_Texture* main_texture;
+    SDL_GPUGraphicsPipeline* pipeline_fill;
+    SDL_GPUGraphicsPipeline* pipeline_line;
 
     bool running = true;
     i32 window_width = 800;
