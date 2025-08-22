@@ -1,30 +1,16 @@
-struct Input {
-    uint vertex_index : SV_VertexID;
+struct VertexInput {
+    float4 position : POSITION;
+    float4 color : COLOR;
 };
 
-struct Output {
+struct VertexOutput {
     float4 color : TEXCOORD0;
     float4 position : SV_Position;
 };
 
-Output main(Input input) {
-    Output output;
-    float2 pos;
-
-    [forcecase] switch(input.vertex_index) {
-        case 0:
-            pos = float2(-1.0f, -1.0f);
-            output.color = float4(1.0f, 0.0f, 0.0f, 1.0f);
-            break;
-        case 1:
-            pos = float2(1.0f, -1.0f);
-            output.color = float4(0.0f, 1.0f, 0.0f, 1.0f);
-            break;
-        case 2:
-            pos = float2(0.0f, 1.0f);
-            output.color = float4(0.0f, 0.0f, 1.0f, 1.0f);
-            break;
-    }
-    output.position = float4(pos, 0.0f, 1.0f);
+VertexOutput main(VertexInput input) {
+    VertexOutput output;
+    output.position = float4(input.position);
+    output.color = float4(input.color);
     return output;
 }

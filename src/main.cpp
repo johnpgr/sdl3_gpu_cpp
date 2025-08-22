@@ -1,7 +1,5 @@
 #include "lib/allocator.h"
 #include "lib/def.h"
-#include "lib/file.h"
-#include "lib/string.h"
 #include "shader.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -14,20 +12,26 @@ struct Game {
     SDL_Texture* main_texture;
     SDL_GPUGraphicsPipeline* pipeline_fill;
     SDL_GPUGraphicsPipeline* pipeline_line;
+    SDL_GPUBuffer* vertex_buffer;
 
     bool running = true;
     i32 window_width = 800;
     i32 window_height = 600;
 };
 
-SDL_FColor COLOR_WHITE = (SDL_FColor){1.0f, 1.0f, 1.0f, 1.0f};
-SDL_FColor COLOR_BLACK = (SDL_FColor){0.0f, 0.0f, 0.0f, 1.0f};
-SDL_FColor COLOR_RED = (SDL_FColor){1.0f, 0.0f, 0.0f, 1.0f};
-SDL_FColor COLOR_GREEN = (SDL_FColor){0.0f, 1.0f, 0.0f, 1.0f};
-SDL_FColor COLOR_BLUE = (SDL_FColor){0.0f, 0.0f, 1.0f, 1.0f};
-SDL_FColor COLOR_CYAN = (SDL_FColor){0.0f, 1.0f, 1.0f, 1.0f};
-SDL_FColor COLOR_YELLOW = (SDL_FColor){1.0f, 1.0f, 0.0f, 1.0f};
-SDL_FColor COLOR_PINK = (SDL_FColor){1.0f, 0.0f, 1.0f, 1.0f};
+struct Vertex {
+    f32 x, y, z, w;
+    f32 r, g, b, a;
+};
+
+constexpr SDL_FColor COLOR_WHITE = (SDL_FColor){1.0f, 1.0f, 1.0f, 1.0f};
+constexpr SDL_FColor COLOR_BLACK = (SDL_FColor){0.0f, 0.0f, 0.0f, 1.0f};
+constexpr SDL_FColor COLOR_RED = (SDL_FColor){1.0f, 0.0f, 0.0f, 1.0f};
+constexpr SDL_FColor COLOR_GREEN = (SDL_FColor){0.0f, 1.0f, 0.0f, 1.0f};
+constexpr SDL_FColor COLOR_BLUE = (SDL_FColor){0.0f, 0.0f, 1.0f, 1.0f};
+constexpr SDL_FColor COLOR_CYAN = (SDL_FColor){0.0f, 1.0f, 1.0f, 1.0f};
+constexpr SDL_FColor COLOR_YELLOW = (SDL_FColor){1.0f, 1.0f, 0.0f, 1.0f};
+constexpr SDL_FColor COLOR_PINK = (SDL_FColor){1.0f, 0.0f, 1.0f, 1.0f};
 
 bool init(Game* game) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -79,19 +83,49 @@ bool init(Game* game) {
         SDL_ReleaseGPUShader(game->device, fragment_shader);
     };
 
+    SDL_GPUVertexAttribute vertex_attributes[] = {
+        {
+            .location = 0,
+            .buffer_slot = 0,
+            .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+            .offset = 0,
+        },
+        {
+            .location = 1,
+            .buffer_slot = 0,
+            .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+            .offset = sizeof(f32) * 4,
+        },
+    };
+
+    SDL_GPUVertexBufferDescription vertex_buffer_descriptions[] = {
+        {
+            .slot = 0,
+            .pitch = sizeof(Vertex),
+            .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+        },
+    };
+
+    SDL_GPUVertexInputState vertex_input_state = {
+        .vertex_buffer_descriptions = vertex_buffer_descriptions,
+        .num_vertex_buffers = 1,
+        .vertex_attributes = vertex_attributes,
+        .num_vertex_attributes = 2,
+    };
+
     SDL_GPUColorTargetDescription color_target_descriptions[] = {{
         .format = SDL_GetGPUSwapchainTextureFormat(game->device, game->window),
     }};
 
     SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {
-        .target_info =
-            {
-                .color_target_descriptions = color_target_descriptions,
-                .num_color_targets = 1,
-            },
         .vertex_shader = vertex_shader,
         .fragment_shader = fragment_shader,
+        .vertex_input_state = vertex_input_state,
         .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+        .target_info = {
+            .color_target_descriptions = color_target_descriptions,
+            .num_color_targets = 1,
+        },
     };
 
     pipeline_info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
@@ -108,12 +142,67 @@ bool init(Game* game) {
         return false;
     }
 
+    Vertex triangle_vertices[] = {
+        {-0.5f, -0.5f, 0.0f, 1.0f,
+            1.0f, 0.0f, 0.0f, 1.0f}, // Bottom left - red
+        {0.5f, -0.5f, 0.0f, 1.0f,
+            0.0f, 1.0f, 0.0f, 1.0f},  // Bottom right - green
+        {0.0f, 0.5f, 0.0f, 1.0f,
+            0.0f, 0.0f, 1.0f, 1.0f},   // Top center - blue
+    };
+
+    SDL_GPUBufferCreateInfo vertex_buffer_info = {
+        .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+        .size = sizeof(triangle_vertices)
+    };
+
+    game->vertex_buffer = SDL_CreateGPUBuffer(game->device, &vertex_buffer_info);
+    if (!game->vertex_buffer) {
+        SDL_Log("Failed to create vertex buffer %s\n", SDL_GetError());
+        return false;
+    }
+
+    SDL_GPUTransferBufferCreateInfo transfer_buffer_info = {
+        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+        .size = sizeof(triangle_vertices),
+    };
+    SDL_GPUTransferBuffer* transfer_buffer =
+        SDL_CreateGPUTransferBuffer(game->device, &transfer_buffer_info);
+    if (!transfer_buffer) {
+        SDL_Log("Failed to create transfer buffer %s\n", SDL_GetError());
+        return false;
+    }
+    defer { SDL_ReleaseGPUTransferBuffer(game->device, transfer_buffer); };
+
+    void* transfer_data = SDL_MapGPUTransferBuffer(game->device, transfer_buffer, false);
+    memcpy(transfer_data, triangle_vertices, sizeof(triangle_vertices));
+    SDL_UnmapGPUTransferBuffer(game->device, transfer_buffer);
+
+    SDL_GPUCommandBuffer* upload_cmdbuf = SDL_AcquireGPUCommandBuffer(game->device);
+    SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(upload_cmdbuf);
+
+    SDL_GPUTransferBufferLocation transfer_location = {
+        .transfer_buffer = transfer_buffer,
+        .offset = 0,
+    };
+
+    SDL_GPUBufferRegion buffer_region = {
+        .buffer = game->vertex_buffer,
+        .offset = 0,
+        .size = sizeof(triangle_vertices),
+    };
+
+    SDL_UploadToGPUBuffer(copy_pass, &transfer_location, &buffer_region, false);
+    SDL_EndGPUCopyPass(copy_pass);
+    SDL_SubmitGPUCommandBuffer(upload_cmdbuf);
+
     SDL_ShowWindow(game->window);
 
     return true;
 }
 
 void deinit(Game* game) {
+    SDL_ReleaseGPUBuffer(game->device, game->vertex_buffer);
     SDL_ReleaseGPUGraphicsPipeline(game->device, game->pipeline_fill);
     SDL_ReleaseGPUGraphicsPipeline(game->device, game->pipeline_line);
     SDL_ReleaseWindowFromGPUDevice(game->device, game->window);
@@ -171,6 +260,21 @@ bool render(Game* game) {
 
     SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(cmdbuf, &color_target_info, 1, nullptr);
     SDL_BindGPUGraphicsPipeline(render_pass, game->pipeline_fill);
+
+    SDL_GPUBufferBinding buffer_bindings[] = {
+        {
+            .buffer = game->vertex_buffer,
+            .offset = 0,
+        },
+    };
+
+    SDL_BindGPUVertexBuffers(
+        render_pass,
+        0,
+        buffer_bindings,
+        1
+    );
+
     SDL_DrawGPUPrimitives(render_pass, 3, 1, 0, 0);
     SDL_EndGPURenderPass(render_pass);
 
