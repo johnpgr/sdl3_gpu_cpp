@@ -19,14 +19,12 @@ struct Game {
     i32 window_width = 800;
     i32 window_height = 600;
 
-    static Game init(Allocator& allocator) {
-        return Game{.allocator = allocator};
-    }
+    static Game init(Allocator& allocator) { return Game{.allocator = allocator}; }
 };
 
-struct Vertex {
-    f32 x, y, z, w;
-    f32 r, g, b, a;
+struct VertexData {
+    Vec4 position;
+    Vec4 color;
 };
 
 struct TransformBuffer {
@@ -109,7 +107,7 @@ bool init(Game* game) {
                     (SDL_GPUVertexBufferDescription[]){
                         {
                             .slot = 0,
-                            .pitch = sizeof(Vertex),
+                            .pitch = sizeof(VertexData),
                             .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
                         },
                     },
@@ -157,10 +155,19 @@ bool init(Game* game) {
         return false;
     }
 
-    Vertex triangle_vertices[] = {
-        {-0.5f, -0.5f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f}, // Bottom left - red
-        {0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f},  // Bottom right - green
-        {0.0f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f},   // Top center - blue
+    VertexData triangle_vertices[] = {
+        {
+            .color = Vec4::init(1.0f, 0.0f, 0.0f, 1.0f),
+            .position = Vec4::init(-0.5f, -0.5f, 0.0f, 1.0f),
+        }, // Bottom left - red
+        {
+            .color = Vec4::init(0.5f, 1.0f, 0.0f, 1.0f),
+            .position = Vec4::init(0.5f, -0.5f, 0.0f, 1.0f),
+        }, // Bottom right - green
+        {
+            .color = Vec4::init(0.0f, 0.0f, 1.0f, 1.0f),
+            .position = Vec4::init(0.0f, 0.5f, 0.0f, 1.0f),
+        }, // Top center - blue
     };
 
     SDL_GPUBufferCreateInfo vertex_buffer_info = {
@@ -248,13 +255,13 @@ bool render(Game* game) {
     // Create a projection matrix based on current window size
     f32 aspect_ratio = (f32)game->window_width / (f32)game->window_height;
     Mat4x4 projection = Mat4x4::orthographic(-aspect_ratio, aspect_ratio, -1.0f, 1.0f, -1.0f, 1.0f);
-    
+
     // Create a rotating model matrix
     f32 time = SDL_GetTicks() / 1000.0f;
     Mat4x4 rotation = Mat4x4::rotation_z(time);
     Mat4x4 scale = Mat4x4::scale(0.8f, 0.8f, 1.0f);
     Mat4x4 model = scale * rotation;
-    
+
     // Combine into model-view-projection matrix
     Mat4x4 mvp = projection * model;
     TransformBuffer transform_buffer = {.mvp_matrix = mvp};
@@ -313,10 +320,7 @@ bool render(Game* game) {
     return true;
 }
 
-int main(int argc, char* argv[]) {
-    (void)argc;
-    (void)argv;
-
+int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     ArenaAllocator arena = ArenaAllocator::init(PageAllocator::init(), 4096, GB(2));
     Allocator allocator = arena.allocator();
 

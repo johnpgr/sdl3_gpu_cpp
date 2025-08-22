@@ -3,6 +3,147 @@
 #include "lib/def.h"
 #include <cmath>
 
+struct Vec3 {
+    union {
+        struct { f32 x, y, z; };
+        f32 data[3];
+    };
+
+    static Vec3 init(f32 x = 0.0f, f32 y = 0.0f, f32 z = 0.0f) {
+        Vec3 result;
+        result.x = x;
+        result.y = y;
+        result.z = z;
+        return result;
+    }
+
+    static Vec3 zero() {
+        return init(0.0f, 0.0f, 0.0f);
+    }
+
+    static Vec3 one() {
+        return init(1.0f, 1.0f, 1.0f);
+    }
+
+    Vec3 operator+(Vec3 other) const {
+        return init(x + other.x, y + other.y, z + other.z);
+    }
+
+    Vec3 operator-(Vec3 other) const {
+        return init(x - other.x, y - other.y, z - other.z);
+    }
+
+    Vec3 operator*(f32 scalar) const {
+        return init(x * scalar, y * scalar, z * scalar);
+    }
+
+    Vec3 operator/(f32 scalar) const {
+        return init(x / scalar, y / scalar, z / scalar);
+    }
+
+    f32 dot(Vec3 other) const {
+        return x * other.x + y * other.y + z * other.z;
+    }
+
+    Vec3 cross(Vec3 other) const {
+        return init(
+            y * other.z - z * other.y,
+            z * other.x - x * other.z,
+            x * other.y - y * other.x
+        );
+    }
+
+    f32 length() const {
+        return sqrtf(x * x + y * y + z * z);
+    }
+
+    f32 length_squared() const {
+        return x * x + y * y + z * z;
+    }
+
+    Vec3 normalize() const {
+        f32 len = length();
+        if (len > 0.0f) {
+            return *this / len;
+        }
+        return zero();
+    }
+
+    f32& operator[](i32 index) { return data[index]; }
+    const f32& operator[](i32 index) const { return data[index]; }
+};
+
+struct Vec4 {
+    union {
+        struct { f32 x, y, z, w; };
+        f32 data[4];
+    };
+
+    static Vec4 init(f32 x = 0.0f, f32 y = 0.0f, f32 z = 0.0f, f32 w = 0.0f) {
+        Vec4 result;
+        result.x = x;
+        result.y = y;
+        result.z = z;
+        result.w = w;
+        return result;
+    }
+
+    static Vec4 zero() {
+        return init(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+
+    static Vec4 one() {
+        return init(1.0f, 1.0f, 1.0f, 1.0f);
+    }
+
+    static Vec4 from_vec3(Vec3 v, f32 w = 1.0f) {
+        return init(v.x, v.y, v.z, w);
+    }
+
+    Vec4 operator+(Vec4 other) const {
+        return init(x + other.x, y + other.y, z + other.z, w + other.w);
+    }
+
+    Vec4 operator-(Vec4 other) const {
+        return init(x - other.x, y - other.y, z - other.z, w - other.w);
+    }
+
+    Vec4 operator*(f32 scalar) const {
+        return init(x * scalar, y * scalar, z * scalar, w * scalar);
+    }
+
+    Vec4 operator/(f32 scalar) const {
+        return init(x / scalar, y / scalar, z / scalar, w / scalar);
+    }
+
+    f32 dot(Vec4 other) const {
+        return x * other.x + y * other.y + z * other.z + w * other.w;
+    }
+
+    f32 length() const {
+        return sqrtf(x * x + y * y + z * z + w * w);
+    }
+
+    f32 length_squared() const {
+        return x * x + y * y + z * z + w * w;
+    }
+
+    Vec4 normalize() const {
+        f32 len = length();
+        if (len > 0.0f) {
+            return *this / len;
+        }
+        return zero();
+    }
+
+    Vec3 xyz() const {
+        return Vec3::init(x, y, z);
+    }
+
+    f32& operator[](i32 index) { return data[index]; }
+    const f32& operator[](i32 index) const { return data[index]; }
+};
+
 struct Mat4x4 {
     union {
         f32 m[16];
