@@ -1,0 +1,28 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "windowsSdkVersion": "10.0.26100.0",
+            "intelliSenseMode": "windows-clang-x64",
+            "compilerPath": "C:/Program Files/LLVM/bin/clang++.exe",
+            "compilerArgs": [
+                "-std=c++23",
+                "-IC:\\SDKs\\SDL3\\include",
+                "-Wall",
+                "-Wextra",
+                "-Wpedantic",
+                "-Wno-c23-extensions",
+                "-Wno-language-extension-token"
+            ]
+        }
+    ],
+    "version": 4
+}

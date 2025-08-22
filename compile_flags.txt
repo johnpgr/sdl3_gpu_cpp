@@ -1,0 +1,7 @@
+-std=c++23
+-IC:\SDKs\SDL3\include
+-Wall
+-Wextra
+-Wpedantic
+-Wno-c99-extensions
+-Wno-missing-designated-field-initializers
