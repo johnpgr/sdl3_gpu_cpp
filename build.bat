@@ -75,11 +75,16 @@ clang++ -std=c++23 ^
     -Wextra ^
     -Wpedantic ^
     -Wno-c99-extensions ^
+    -Wno-dangling ^
+    -Wno-address-of-temporary ^
     -Wno-missing-designated-field-initializers ^
+    -Wno-nested-anon-types ^
+    -Wno-gnu-anonymous-struct ^
     -Wno-reorder-init-list ^
+    -Wno-deprecated-declarations ^
     -I%SDL3_INCLUDE_DIR% ^
     -L%SDL3_LIB_DIR% ^
-    -o %BUILD_DIR%\main.exe ^
+    -o main.exe ^
     %SRC_DIR%\main.cpp ^
     -Wl,/SUBSYSTEM:WINDOWS ^
     -lSDL3

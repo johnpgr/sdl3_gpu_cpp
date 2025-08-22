@@ -1,348 +1,196 @@
 #include "lib/allocator.h"
 #include "lib/def.h"
 #include "math.h"
+#include "renderer.h"
 #include "shader.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+enum GameInitError {
+    SDL_INIT_FAILED,
+    WINDOW_CREATION_FAILED,
+    GPU_DEVICE_CREATION_FAILED,
+    RENDERER_INIT_FAILED,
+};
+
+constexpr string to_string(GameInitError error) {
+    switch (error) {
+        case SDL_INIT_FAILED:
+            return "SDL_INIT_FAILED";
+        case WINDOW_CREATION_FAILED:
+            return "WINDOW_CREATION_FAILED";
+        case GPU_DEVICE_CREATION_FAILED:
+            return "GPU_DEVICE_CREATION_FAILED";
+        case RENDERER_INIT_FAILED:
+            return "RENDERER_INIT_FAILED";
+        default:
+            return "UNKNOWN_ERROR";
+    }
+}
+
 struct Game {
     Allocator& allocator;
 
-    SDL_Window* window{};
-    SDL_GPUDevice* device{};
-    SDL_Texture* main_texture{};
-    SDL_GPUGraphicsPipeline* pipeline_fill{};
-    SDL_GPUGraphicsPipeline* pipeline_line{};
-    SDL_GPUBuffer* vertex_buffer{};
+    SDL_Window* window;
+    SDL_GPUDevice* device;
+    Renderer renderer;
 
-    bool running = true;
-    i32 window_width = 800;
-    i32 window_height = 600;
+    bool running;
+    i32 window_width;
+    i32 window_height;
 
-    static Game init(Allocator& allocator) { return Game{.allocator = allocator}; }
-};
+    // FPS track
+    u64 frame_count;
+    u64 last_time;
+    u64 fps_update_time;
+    i32 current_fps;
 
-struct VertexData {
-    Vec4 position;
-    Vec4 color;
-};
+    static std::expected<Game, GameInitError>
+    init(Allocator& allocator, i32 window_width, i32 window_height) {
+        if (!SDL_Init(SDL_INIT_VIDEO)) {
+            SDL_Log("Failed to start SDL %s\n", SDL_GetError());
+            return std::unexpected(SDL_INIT_FAILED);
+        }
 
-struct TransformBuffer {
-    Mat4x4 mvp_matrix;
-};
+        SDL_Window* window = SDL_CreateWindow(
+            "FPS: 0",
+            window_width,
+            window_height,
+            SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE
+        );
+        if (!window) {
+            SDL_Log("Failed to create window %s\n", SDL_GetError());
+            return std::unexpected(WINDOW_CREATION_FAILED);
+        }
 
-[[maybe_unused]]
-constexpr SDL_FColor COLOR_WHITE = {1.0f, 1.0f, 1.0f, 1.0f};
-[[maybe_unused]]
-constexpr SDL_FColor COLOR_BLACK = {0.0f, 0.0f, 0.0f, 1.0f};
-[[maybe_unused]]
-constexpr SDL_FColor COLOR_RED = {1.0f, 0.0f, 0.0f, 1.0f};
-[[maybe_unused]]
-constexpr SDL_FColor COLOR_GREEN = {0.0f, 1.0f, 0.0f, 1.0f};
-[[maybe_unused]]
-constexpr SDL_FColor COLOR_BLUE = {0.0f, 0.0f, 1.0f, 1.0f};
-[[maybe_unused]]
-constexpr SDL_FColor COLOR_CYAN = {0.0f, 1.0f, 1.0f, 1.0f};
-[[maybe_unused]]
-constexpr SDL_FColor COLOR_YELLOW = {1.0f, 1.0f, 0.0f, 1.0f};
-[[maybe_unused]]
-constexpr SDL_FColor COLOR_PINK = {1.0f, 0.0f, 1.0f, 1.0f};
-
-bool init(Game* game) {
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
-        SDL_Log("Failed to start SDL %s\n", SDL_GetError());
-        return false;
-    }
-
-    game->window = SDL_CreateWindow(
-        "Unnamed game",
-        game->window_width,
-        game->window_height,
-        SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE
-    );
-    if (!game->window) {
-        SDL_Log("Failed to create window %s\n", SDL_GetError());
-        return false;
-    }
-
-    game->device = SDL_CreateGPUDevice(
-        SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_MSL,
-        true,
-        nullptr
-    );
-
-    if (!game->device) {
-        SDL_Log("Failed to create GPU Device %s\n", SDL_GetError());
-        return false;
-    }
-
-    string device_driver = SDL_GetGPUDeviceDriver(game->device);
-    SDL_Log("Created GPU Device with driver %s\n", device_driver);
-
-    if (!SDL_ClaimWindowForGPUDevice(game->device, game->window)) {
-        SDL_Log("Failed to claim window for GPU Device %s\n", SDL_GetError());
-        return false;
-    }
-
-    SDL_GPUShader* vertex_shader =
-        load_shader(game->allocator, game->device, "raw-triangle.vert", 0, 1, 0, 0);
-    SDL_GPUShader* fragment_shader =
-        load_shader(game->allocator, game->device, "solid-color.frag", 0, 0, 0, 0);
-
-    if (!vertex_shader || !fragment_shader) {
-        SDL_Log("Failed to load shaders %s\n", SDL_GetError());
-        return false;
-    }
-    defer {
-        SDL_ReleaseGPUShader(game->device, vertex_shader);
-        SDL_ReleaseGPUShader(game->device, fragment_shader);
-    };
-
-    SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {
-        .vertex_shader = vertex_shader,
-        .fragment_shader = fragment_shader,
-        .vertex_input_state =
-            (SDL_GPUVertexInputState){
-                .vertex_buffer_descriptions =
-                    (SDL_GPUVertexBufferDescription[]){
-                        {
-                            .slot = 0,
-                            .pitch = sizeof(VertexData),
-                            .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
-                        },
-                    },
-                .num_vertex_buffers = 1,
-                .vertex_attributes =
-                    (SDL_GPUVertexAttribute[]){
-                        {
-                            .location = 0,
-                            .buffer_slot = 0,
-                            .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-                            .offset = 0,
-                        },
-                        {
-                            .location = 1,
-                            .buffer_slot = 0,
-                            .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-                            .offset = sizeof(f32) * 4,
-                        },
-                    },
-                .num_vertex_attributes = 2,
-            },
-        .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
-        .target_info = {
-            .color_target_descriptions =
-                (SDL_GPUColorTargetDescription[]){
-                    {
-                        .format = SDL_GetGPUSwapchainTextureFormat(game->device, game->window),
-                    },
-                },
-            .num_color_targets = 1,
-        },
-    };
-
-    pipeline_info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
-    game->pipeline_fill = SDL_CreateGPUGraphicsPipeline(game->device, &pipeline_info);
-    if (!game->pipeline_fill) {
-        SDL_Log("Failed to create fill pipeline %s\n", SDL_GetError());
-        return false;
-    }
-
-    pipeline_info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_LINE;
-    game->pipeline_line = SDL_CreateGPUGraphicsPipeline(game->device, &pipeline_info);
-    if (!game->pipeline_line) {
-        SDL_Log("Failed to create line pipeline %s\n", SDL_GetError());
-        return false;
-    }
-
-    VertexData triangle_vertices[] = {
-        {
-            .color = Vec4::init(1.0f, 0.0f, 0.0f, 1.0f),
-            .position = Vec4::init(-0.5f, -0.5f, 0.0f, 1.0f),
-        }, // Bottom left - red
-        {
-            .color = Vec4::init(0.5f, 1.0f, 0.0f, 1.0f),
-            .position = Vec4::init(0.5f, -0.5f, 0.0f, 1.0f),
-        }, // Bottom right - green
-        {
-            .color = Vec4::init(0.0f, 0.0f, 1.0f, 1.0f),
-            .position = Vec4::init(0.0f, 0.5f, 0.0f, 1.0f),
-        }, // Top center - blue
-    };
-
-    SDL_GPUBufferCreateInfo vertex_buffer_info = {
-        .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-        .size = sizeof(triangle_vertices)
-    };
-
-    game->vertex_buffer = SDL_CreateGPUBuffer(game->device, &vertex_buffer_info);
-    if (!game->vertex_buffer) {
-        SDL_Log("Failed to create vertex buffer %s\n", SDL_GetError());
-        return false;
-    }
-
-    SDL_GPUTransferBufferCreateInfo transfer_buffer_info = {
-        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-        .size = sizeof(triangle_vertices),
-    };
-    SDL_GPUTransferBuffer* transfer_buffer =
-        SDL_CreateGPUTransferBuffer(game->device, &transfer_buffer_info);
-    if (!transfer_buffer) {
-        SDL_Log("Failed to create transfer buffer %s\n", SDL_GetError());
-        return false;
-    }
-    defer { SDL_ReleaseGPUTransferBuffer(game->device, transfer_buffer); };
-
-    void* transfer_data = SDL_MapGPUTransferBuffer(game->device, transfer_buffer, false);
-    memcpy(transfer_data, triangle_vertices, sizeof(triangle_vertices));
-    SDL_UnmapGPUTransferBuffer(game->device, transfer_buffer);
-
-    SDL_GPUCommandBuffer* upload_cmdbuf = SDL_AcquireGPUCommandBuffer(game->device);
-    SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(upload_cmdbuf);
-
-    SDL_GPUTransferBufferLocation transfer_location = {
-        .transfer_buffer = transfer_buffer,
-        .offset = 0,
-    };
-
-    SDL_GPUBufferRegion buffer_region = {
-        .buffer = game->vertex_buffer,
-        .offset = 0,
-        .size = sizeof(triangle_vertices),
-    };
-
-    SDL_UploadToGPUBuffer(copy_pass, &transfer_location, &buffer_region, false);
-    SDL_EndGPUCopyPass(copy_pass);
-    SDL_SubmitGPUCommandBuffer(upload_cmdbuf);
-
-    SDL_ShowWindow(game->window);
-
-    return true;
-}
-
-void deinit(Game* game) {
-    SDL_ReleaseGPUBuffer(game->device, game->vertex_buffer);
-    SDL_ReleaseGPUGraphicsPipeline(game->device, game->pipeline_fill);
-    SDL_ReleaseGPUGraphicsPipeline(game->device, game->pipeline_line);
-    SDL_ReleaseWindowFromGPUDevice(game->device, game->window);
-    SDL_DestroyWindow(game->window);
-    SDL_DestroyGPUDevice(game->device);
-    SDL_Quit();
-}
-
-void handle_event(SDL_Event* event, Game* game) {
-    switch (event->type) {
-        case SDL_EVENT_QUIT:
-            game->running = false;
-            break;
-        case SDL_EVENT_KEY_DOWN:
-            switch (event->key.key) {
-                case SDLK_ESCAPE:
-                    game->running = false;
-                    break;
-            }
-            break;
-        case SDL_EVENT_WINDOW_RESIZED:
-            // Update the stored window dimensions
-            game->window_width = event->window.data1;
-            game->window_height = event->window.data2;
-            SDL_Log("Window resized to %dx%d\n", game->window_width, game->window_height);
-            break;
-    }
-}
-
-bool render(Game* game) {
-    // Create a projection matrix based on current window size
-    f32 aspect_ratio = (f32)game->window_width / (f32)game->window_height;
-    Mat4x4 projection = Mat4x4::orthographic(-aspect_ratio, aspect_ratio, -1.0f, 1.0f, -1.0f, 1.0f);
-
-    // Create a rotating model matrix
-    f32 time = SDL_GetTicks() / 1000.0f;
-    Mat4x4 rotation = Mat4x4::rotation_z(time);
-    Mat4x4 scale = Mat4x4::scale(0.8f, 0.8f, 1.0f);
-    Mat4x4 model = scale * rotation;
-
-    // Combine into model-view-projection matrix
-    Mat4x4 mvp = projection * model;
-    TransformBuffer transform_buffer = {.mvp_matrix = mvp};
-
-    SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(game->device);
-    if (!cmdbuf) {
-        SDL_Log("Failed to acquire command buffer %s\n", SDL_GetError());
-        return false;
-    }
-
-    SDL_GPUTexture* swapchain_texture;
-    if (!SDL_WaitAndAcquireGPUSwapchainTexture(
-            cmdbuf,
-            game->window,
-            &swapchain_texture,
-            nullptr,
+        SDL_GPUDevice* device = SDL_CreateGPUDevice(
+            SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_MSL,
+            true,
             nullptr
-        )) {
-        SDL_Log("Failed to acquire swapchain texture %s\n", SDL_GetError());
-        return false;
+        );
+        if (!device) {
+            SDL_Log("Failed to create GPU Device %s\n", SDL_GetError());
+            return std::unexpected(GPU_DEVICE_CREATION_FAILED);
+        }
+
+        string device_driver = SDL_GetGPUDeviceDriver(device);
+        SDL_Log("Created GPU Device with driver %s\n", device_driver);
+
+        if (!SDL_ClaimWindowForGPUDevice(device, window)) {
+            SDL_Log("Failed to claim window for GPU Device %s\n", SDL_GetError());
+            return std::unexpected(WINDOW_CREATION_FAILED);
+        }
+
+        auto renderer = Renderer::init(allocator, device, window);
+        if (!renderer.has_value()) {
+            SDL_Log("Failed to initialize renderer: %s\n", to_string(renderer.error()));
+            return std::unexpected(RENDERER_INIT_FAILED);
+        }
+
+        SDL_ShowWindow(window);
+
+        u64 current_time = SDL_GetPerformanceCounter();
+
+        return Game{
+            .allocator = allocator,
+            .window = window,
+            .device = device,
+            .renderer = renderer.value(),
+            .running = true,
+            .window_width = window_width,
+            .window_height = window_height,
+            .frame_count = 0,
+            .last_time = current_time,
+            .fps_update_time = current_time,
+            .current_fps = 0
+        };
     }
 
-    if (!swapchain_texture) {
-        SDL_Log("Swapchain texture is null\n");
-        SDL_SubmitGPUCommandBuffer(cmdbuf);
-        return false;
+    void deinit() {
+        renderer.deinit();
+        SDL_ReleaseWindowFromGPUDevice(device, window);
+        SDL_DestroyWindow(window);
+        SDL_DestroyGPUDevice(device);
+        SDL_Quit();
     }
 
-    SDL_PushGPUVertexUniformData(cmdbuf, 0, &transform_buffer, sizeof(TransformBuffer));
+    void update_fps() {
+        frame_count++;
+        u64 current_time = SDL_GetPerformanceCounter();
+        u64 frequency = SDL_GetPerformanceFrequency();
 
-    SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(
-        cmdbuf,
-        &(SDL_GPUColorTargetInfo){
-            .texture = swapchain_texture,
-            .clear_color = COLOR_BLACK,
-            .load_op = SDL_GPU_LOADOP_CLEAR,
-            .store_op = SDL_GPU_STOREOP_STORE,
-        },
-        1,
-        nullptr
-    );
-    SDL_BindGPUGraphicsPipeline(render_pass, game->pipeline_fill);
+        // Update FPS every second
+        if (current_time - fps_update_time >= frequency) {
+            f64 elapsed = (f64)(current_time - fps_update_time) / frequency;
+            current_fps = (i32)(frame_count / elapsed);
 
-    SDL_GPUBufferBinding buffer_bindings[] = {
-        {
-            .buffer = game->vertex_buffer,
-            .offset = 0,
-        },
-    };
-    SDL_BindGPUVertexBuffers(render_pass, 0, buffer_bindings, 1);
+            // Update window title
+            char title[64];
+            SDL_snprintf(title, sizeof(title), "FPS: %d", current_fps);
+            SDL_SetWindowTitle(window, title);
 
-    SDL_DrawGPUPrimitives(render_pass, 3, 1, 0, 0);
-    SDL_EndGPURenderPass(render_pass);
+            frame_count = 0;
+            fps_update_time = current_time;
+        }
 
-    SDL_SubmitGPUCommandBuffer(cmdbuf);
-    return true;
-}
+        last_time = current_time;
+    }
+
+    void handle_event(SDL_Event* event) {
+        switch (event->type) {
+            case SDL_EVENT_QUIT:
+                running = false;
+                break;
+            case SDL_EVENT_KEY_DOWN:
+                switch (event->key.key) {
+                    case SDLK_ESCAPE:
+                        running = false;
+                        break;
+                }
+                break;
+            case SDL_EVENT_WINDOW_RESIZED:
+                // Update the stored window dimensions
+                window_width = event->window.data1;
+                window_height = event->window.data2;
+                SDL_Log("Window resized to %dx%d\n", window_width, window_height);
+                break;
+        }
+    }
+
+    bool render() {
+        return renderer.render(window, window_width, window_height);
+    }
+};
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     ArenaAllocator arena = ArenaAllocator::init(PageAllocator::init(), 4096, GB(2));
     Allocator allocator = arena.allocator();
 
-    Game game = Game::init(allocator);
-
-    defer {
-        deinit(&game);
-        arena.deinit();
-    };
-
-    if (!init(&game)) {
+    auto game = Game::init(allocator, 1280, 720);
+    if (!game.has_value()) {
+        SDL_Log("Failed to initialize game: %s\n", to_string(game.error()));
         return -1;
     }
 
-    while (game.running) {
+    defer {
+        game->deinit();
+        arena.deinit();
+    };
+
+    while (game->running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            handle_event(&event, &game);
+            game->handle_event(&event);
         }
-        if (!render(&game)) {
-            break;
+        if (!game->render()) {
+            SDL_ShowSimpleMessageBox(
+                0,
+                "Render Error",
+                "Failed to render frame. Check the console for details.",
+                game->window
+            );
         }
+        game->update_fps();
     }
 
     return 0;
