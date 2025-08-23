@@ -1,8 +1,6 @@
 #include "lib/allocator.h"
 #include "lib/def.h"
-#include "math.h"
 #include "renderer.h"
-#include "shader.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
@@ -31,9 +29,9 @@ constexpr string to_string(GameInitError error) {
 struct Game {
     Allocator& allocator;
 
+    Renderer& renderer;
     SDL_Window* window;
     SDL_GPUDevice* device;
-    Renderer renderer;
 
     bool running;
     i32 window_width;
@@ -46,7 +44,7 @@ struct Game {
     i32 current_fps;
 
     static std::expected<Game, GameInitError>
-    init(Allocator& allocator, i32 window_width, i32 window_height) {
+    init(Allocator& allocator, Allocator& temp_allocator, i32 window_width, i32 window_height) {
         if (!SDL_Init(SDL_INIT_VIDEO)) {
             SDL_Log("Failed to start SDL %s\n", SDL_GetError());
             return std::unexpected(SDL_INIT_FAILED);
@@ -81,7 +79,7 @@ struct Game {
             return std::unexpected(WINDOW_CREATION_FAILED);
         }
 
-        auto renderer = Renderer::init(allocator, device, window);
+        auto renderer = Renderer::init(temp_allocator, device, window);
         if (!renderer.has_value()) {
             SDL_Log("Failed to initialize renderer: %s\n", to_string(renderer.error()));
             return std::unexpected(RENDERER_INIT_FAILED);
@@ -93,9 +91,9 @@ struct Game {
 
         return Game{
             .allocator = allocator,
+            .renderer = renderer.value(),
             .window = window,
             .device = device,
-            .renderer = renderer.value(),
             .running = true,
             .window_width = window_width,
             .window_height = window_height,
@@ -157,16 +155,17 @@ struct Game {
         }
     }
 
-    bool render() {
-        return renderer.render(window, window_width, window_height);
-    }
+    bool render() { return renderer.render(window, window_width, window_height); }
 };
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
-    ArenaAllocator arena = ArenaAllocator::init(PageAllocator::init(), 4096, GB(2));
-    Allocator allocator = arena.allocator();
+    ArenaAllocator permanent_storage = ArenaAllocator::init(PageAllocator::init(), 4096, GB(2));
+    Allocator allocator = permanent_storage.allocator();
 
-    auto game = Game::init(allocator, 1280, 720);
+    ArenaAllocator temp_storage = ArenaAllocator::init(PageAllocator::init(), 4096, MB(64));
+    Allocator temp_allocator = temp_storage.allocator();
+
+    auto game = Game::init(allocator, temp_allocator, 1280, 720);
     if (!game.has_value()) {
         SDL_Log("Failed to initialize game: %s\n", to_string(game.error()));
         return -1;
@@ -174,7 +173,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
     defer {
         game->deinit();
-        arena.deinit();
+        permanent_storage.deinit();
+        temp_storage.deinit();
     };
 
     while (game->running) {
@@ -183,14 +183,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
             game->handle_event(&event);
         }
         if (!game->render()) {
-            SDL_ShowSimpleMessageBox(
-                0,
-                "Render Error",
-                "Failed to render frame. Check the console for details.",
-                game->window
-            );
+            SDL_Log("Render failed\n");
         }
         game->update_fps();
+        temp_storage.reset();
     }
 
     return 0;

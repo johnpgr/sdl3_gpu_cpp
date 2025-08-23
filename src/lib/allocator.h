@@ -235,6 +235,14 @@ struct ArenaAllocator {
         return Allocator::init(this, alloc_impl, realloc_impl, free_impl);
     }
 
+    void reset() {
+        Block* block = current_block;
+        while(block){
+            block->offset = 0;
+            block = block->next;
+        }
+    }
+
     void deinit() {
         Block* block = current_block;
         while (block) {
